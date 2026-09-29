@@ -21,3 +21,39 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -v
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::215675828606:role/kronos-cicd-github-actions-role
+          aws-region: eu-west-2
+
+      - name: Package function
+        run: cd src && zip ../function.zip lambda_function.py
+
+      - name: Deploy to Lambda
+        run: |
+          if aws lambda get-function --function-name kronos-cicd-function > /dev/null 2>&1; then
+            echo "Function exists, updating code"
+            aws lambda update-function-code --function-name kronos-cicd-function --zip-file fileb://function.zip
+            aws lambda wait function-updated-v2 --function-name kronos-cicd-function
+          else
+            echo "Function not found, creating it"
+            aws lambda create-function \
+              --function-name kronos-cicd-function \
+              --runtime python3.14 \
+              --handler lambda_function.lambda_handler \
+              --role arn:aws:iam::215675828606:role/kronos-cicd-lambda-exec-role \
+              --zip-file fileb://function.zip
+            aws lambda wait function-active-v2 --function-name kronos-cicd-function
+          fi
