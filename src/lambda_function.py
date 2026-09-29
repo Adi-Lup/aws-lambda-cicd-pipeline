@@ -1,7 +1,7 @@
 import json
 import os
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 
 def lambda_handler(event, context):
